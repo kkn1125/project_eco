@@ -1,5 +1,5 @@
-import net from "net";
-import zmq from "zeromq";
+import * as net from "net";
+import * as zmq from "zeromq";
 import dotenv from "dotenv";
 import path from "path";
 const __dirname = path.resolve();
