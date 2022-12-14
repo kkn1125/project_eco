@@ -7,7 +7,9 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development vite --config vite.config.js"
+    "style": "sass --watch --no-source-map assets/styles/main.scss:assets/styles/main.css",
+    "dev:front": "cross-env NODE_ENV=development vite --config vite.config.js",
+    "dev": "concurrently --kill-others-on-fail \"npm run style\" \"npm run dev:front\""
   },
   "dependencies": {
     "cors": "^2.8.5",
