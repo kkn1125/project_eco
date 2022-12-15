@@ -4,8 +4,10 @@ module.exports = {
       name: "app1",
       script: "./app.js",
       node_args: "-r esm",
-      exec_mode: 'cluster',
+      watch: true,
+      exec_mode: "cluster",
       instances: 2,
+      wait_ready: true,
       env_production: {
         NODE_ENV: "production",
       },

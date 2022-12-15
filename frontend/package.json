@@ -7,11 +7,12 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "style": "sass --watch --no-source-map assets/styles/main.scss:assets/styles/main.css",
+    "style": "CHOKIDAR_USEPOLLING=true sass --watch --no-source-map assets/styles/main.scss:assets/styles/main.css",
     "dev:front": "cross-env NODE_ENV=development vite --config vite.config.js",
     "dev": "concurrently --kill-others-on-fail \"npm run style\" \"npm run dev:front\""
   },
   "dependencies": {
+    "axios": "^1.2.1",
     "cors": "^2.8.5",
     "cross-env": "^7.0.3",
     "dotenv": "^16.0.3",

@@ -9,6 +9,8 @@ export default defineConfig(({ command, mode, ssrBuild }) => {
   dotenv.config({
     path: path.join(__dirname, `.env.${mode}`),
   });
+  const apiHost = process.env.VITE_API_HOST;
+  const apiPort = process.env.VITE_API_PORT;
   return {
     // vite config
     define: {
@@ -19,6 +21,14 @@ export default defineConfig(({ command, mode, ssrBuild }) => {
       port: process.env.PORT,
       watch: {
         usePolling: true,
+      },
+      proxy: {
+        "/v1/query": {
+          target: `http://${apiHost}:${apiPort}`,
+          changeOrigin: true,
+          secure: false,
+          ws: false,
+        },
       },
     },
   };

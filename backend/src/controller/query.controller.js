@@ -1,5 +1,5 @@
-import queryService from "../services/query.service";
 import express from "express";
+import queryService from "../services/query.service.js";
 
 const queryController = new express.Router();
 

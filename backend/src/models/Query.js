@@ -1,5 +1,3 @@
-class Query {
+class Query {}
 
-}
-
-export default Query
+export default Query;
