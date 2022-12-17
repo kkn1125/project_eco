@@ -264,18 +264,59 @@ Query.enter = async (req, res, next) => {
 };
 
 Query.login = async (req, res, next) => {
+  const data = req.body;
+  await sql.promise().query(
+    `UPDATE user
+    LEFT JOIN enter
+    ON enter.user_id = user.id
+    SET nickname = ?, password = ?
+    WHERE uuid = ?
+    AND enter.server_id = ? AND enter.channel_id = ?`,
+    [data.nickname, data.password, data.uuid, data.server, data.channel]
+  );
+  await sql.promise().query(
+    `UPDATE enter
+    SET type = 'player'
+    WHERE server_id = ?
+    AND channel_id = ?
+    AND user_id = (
+      SELECT id
+      FROM user
+      WHERE uuid = ?
+    )`,
+    [data.server, data.channel, data.uuid]
+  );
   res.status(200).json({
     ok: true,
   });
 };
-Query.player = (req, res, next) => {};
 
 Query.logout = async (req, res, next) => {
   res.status(200).json({
     ok: true,
   });
 };
-Query.delete = (req, res, next) => {};
+
+Query.location = async (req, res, next) => {
+  const data = req.body;
+  await sql.promise().query(
+    `UPDATE location
+    SET
+      pox = ?,
+      poy = ?,
+      poz = ?,
+      roy = ?
+    WHERE user_id = (
+      SELECT id
+      FROM user
+      WHERE uuid = ?
+    )`,
+    [data.pox, data.poy, data.poz, data.roy, data.uuid]
+  );
+  res.status(200).json({
+    ok: true,
+  });
+};
 
 Query.players = async (req, res, next) => {
   const [readPlayers] = await sql.promise().query(

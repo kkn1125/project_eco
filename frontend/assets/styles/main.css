@@ -10,3 +10,38 @@ html body canvas {
   top: 0;
   left: 0;
 }
+html .login-window,
+html body .login-window {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  top: 50%;
+  left: 50%;
+  gap: 1rem;
+  z-index: 100;
+  transform: translate(-50%, -50%);
+  -webkit-transform: translate(-50%, -50%);
+  -moz-transform: translate(-50%, -50%);
+  -ms-transform: translate(-50%, -50%);
+  -o-transform: translate(-50%, -50%);
+}
+html .login-window input, html .login-window button,
+html body .login-window input,
+html body .login-window button {
+  padding: 0.5rem 0.8rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  outline: none;
+  border-radius: 0.5rem;
+  -webkit-border-radius: 0.5rem;
+  -moz-border-radius: 0.5rem;
+  -ms-border-radius: 0.5rem;
+  -o-border-radius: 0.5rem;
+}
+html .login-window button,
+html body .login-window button {
+  background-color: rgb(63, 140, 188);
+  color: white;
+  font-weight: 700;
+  text-transform: uppercase;
+}
