@@ -17,7 +17,7 @@ function getConnection() {
 function keepAlive() {
   setTimeout(() => {
     connection.query("SELECT 1");
-    console.log("ping to db");
+    // console.log("ping to db");
     keepAlive();
   }, 5000);
 }

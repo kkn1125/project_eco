@@ -1,16 +1,218 @@
+// import { convertLangToRegion } from "../../../frontend/src/utils/tools.js";
 import sql from "../database/mariadb.js";
 import Query from "../models/Query.js";
+import { convertLangToRegion } from "../utils/tools.js";
 
 const options = {
   limit: {
     inventory: 50,
+    socket: 50,
     server: 5,
-    channel: 5,
+    channel: 50,
+  },
+  ip: {
+    socket: "192.168.254.16",
+  },
+  port: {
+    socket: 4000,
   },
 };
 
+async function findEmptyServerChannel(createUser) {
+  /* server indexing */
+  let emptyServer = null;
+  const [readServer] = await sql
+    .promise()
+    .query(`SHOW TABLE STATUS WHERE name = 'server'`);
+
+  /* channel indexing */
+  let emptyChannel = null;
+  const [readChannel] = await sql
+    .promise()
+    .query(`SHOW TABLE STATUS WHERE name = 'channel'`);
+
+  /* is full channel */
+  const [isFullChannel] = await sql.promise().query(
+    `SELECT 
+      channel_id, channel.limits, COUNT(*) AS user_count
+    FROM
+      enter
+        LEFT JOIN
+      channel ON channel.id = enter.channel_id
+    GROUP BY channel_id`
+  );
+
+  if (isFullChannel.length === 0) {
+    emptyChannel = readChannel[0].Auto_increment;
+    await sql.promise().query(
+      `INSERT iNTO channel (name, limits)
+      VALUES (?, ?)`,
+      ["channel${readChannel[0].Auto_increment}", options.limit.channel]
+    );
+  } else {
+    let isFull = true;
+    for (let i = 0; i < isFullChannel.length; i++) {
+      const usableChannel = isFullChannel[i];
+      if (usableChannel.user_count < usableChannel.limits) {
+        emptyChannel = usableChannel.channel_id;
+        isFull = false;
+        break;
+      }
+    }
+    if (isFull) {
+      emptyChannel = readChannel[0].Auto_increment;
+      await sql.promise().query(
+        `INSERT iNTO channel (name, limits)
+        VALUES (?, ?)`,
+        ["channel${emptyChannel}", options.limit.channel]
+      );
+    }
+  }
+
+  /* is full server */
+  const [isFullServer] = await sql.promise().query(
+    `SELECT 
+      server_id,
+      channel_id,
+      server.limits,
+      channel.limits AS channel_limits,
+      COUNT(DISTINCT (channel_id)) AS channel_count,
+      COUNT(user_id) AS user_count
+    FROM
+      enter
+        LEFT JOIN
+      server ON server.id = enter.server_id
+        LEFT JOIN
+      channel ON channel.id = enter.channel_id
+    GROUP BY server_id`
+  );
+  if (isFullServer.length === 0) {
+    emptyServer = readServer[0].Auto_increment;
+    await sql.promise().query(
+      `INSERT iNTO server (name, limits)
+      VALUES (?, ?)`,
+      ["server${readServer[0].Auto_increment}", options.limit.channel]
+    );
+  } else {
+    let isFull = true;
+    for (let i = 0; i < isFullServer.length; i++) {
+      const usableServer = isFullServer[i];
+      if (
+        usableServer.channel_count < usableServer.limits ||
+        usableServer.user_count / usableServer.channel_count <
+          usableServer.channel_limits
+      ) {
+        emptyServer = usableServer.server_id;
+        isFull = false;
+        break;
+      }
+    }
+    if (isFull) {
+      emptyServer = readServer[0].Auto_increment;
+      await sql.promise().query(
+        `INSERT iNTO server (name, limits)
+        VALUES (?, ?)`,
+        ["server${emptyServer}", options.limit.channel]
+      );
+    }
+  }
+
+  /* insert enter row in empty server and channel */
+  await sql.promise().query(
+    `INSERT INTO enter (server_id, channel_id, user_id, type, status)
+        VALUES (?, ?, ?, ?, ?)`,
+    [emptyServer, emptyChannel, createUser.insertId, "viewer", true]
+  );
+
+  return {
+    server: {
+      pk: emptyServer,
+    },
+    channel: {
+      pk: emptyChannel,
+    },
+  };
+}
+
+async function findEmptySocket(data, createUser) {
+  /* channel indexing */
+  let emptySocket = null;
+  let ip = null;
+  let port = null;
+  let limits = null;
+  const [readSocket] = await sql
+    .promise()
+    .query(`SHOW TABLE STATUS WHERE name = 'socket'`);
+
+  /* is full socket */
+  const [isFullSocket] = await sql.promise().query(
+    `SELECT 
+      socket_id,
+      socket.ip,
+      socket.port,
+      socket.limits,
+      COUNT(*) AS user_count
+    FROM
+      connection
+        LEFT JOIN
+      socket ON socket.id = connection.socket_id
+    GROUP BY socket_id`
+  );
+
+  if (isFullSocket.length === 0) {
+    emptySocket = readSocket[0].Auto_increment;
+    ip = options.ip.socket;
+    port = options.port.socket + readSocket[0].Auto_increment - 1;
+    limits = options.limit.socket;
+    await sql.promise().query(
+      `INSERT iNTO socket (ip, port, limits)
+      VALUES (?, ?, ?)`,
+      [ip, port, options.limit.socket]
+    );
+  } else {
+    let isFull = true;
+    for (let i = 0; i < isFullSocket.length; i++) {
+      const usableSocket = isFullSocket[i];
+      if (usableSocket.user_count < usableSocket.limits) {
+        emptySocket = usableSocket.socket_id;
+        ip = usableSocket.ip;
+        port = usableSocket.port;
+        limits = options.limit.socket;
+        isFull = false;
+        break;
+      }
+    }
+    if (isFull) {
+      emptySocket = readSocket[0].Auto_increment;
+      ip = options.ip.socket;
+      port = options.port.socket + readSocket[0].Auto_increment - 1;
+      limits = options.limit.socket;
+      await sql.promise().query(
+        `INSERT iNTO socket (ip, port, limits)
+        VALUES (?, ?, ?)`,
+        [ip, port, options.limit.socket]
+      );
+    }
+  }
+  /* insert enter row in empty socket */
+  await sql.promise().query(
+    `INSERT INTO connection (socket_id, user_id, locale, connected)
+        VALUES (?, ?, ?, ?)`,
+    [emptySocket, createUser.insertId, convertLangToRegion(data.locale), true]
+  );
+  return {
+    ip: ip,
+    port: port,
+    limits: limits,
+  };
+}
+
 Query.enter = async (req, res, next) => {
   const data = req.body;
+  let returnData = {
+    serverChannel: null,
+    socket: null,
+  };
   const [readUser] = await sql
     .promise()
     .query(`SHOW TABLE STATUS WHERE name = 'user'`);
@@ -28,105 +230,74 @@ Query.enter = async (req, res, next) => {
     ]
   );
 
-  /* channel */
-  const [readChannel] = await sql
-    .promise()
-    .query(`SHOW TABLE STATUS WHERE name = 'channel'`);
-  const [findChannel] = await sql.promise().query(
-    `SELECT channel.id, channel.limits, COUNT(*) AS count
-      FROM channel
-      LEFT JOIN enter
-      ON channel.id = enter.channel_id
-      GROUP BY channel.id`
-  );
-  let isChannelFull = true;
-  let channelTarget = null;
-  for (let i = 0; i < findChannel.length; i++) {
-    let channel = findChannel[i];
-    if (channel.count < channel.limits) {
-      isChannelFull = false;
-      channelTarget = channel.id;
-      break;
-    }
-  }
-  if (isChannelFull) {
-    await sql.promise().query(
-      `INSERT INTO channel (name, limits)
-      VALUES (?, ?)`,
-      [`channel${readChannel[0].Auto_increment || 0}`, options.limit.channel]
-    );
-    channelTarget = readChannel[0].Auto_increment || 0;
-  }
+  try {
+    returnData.serverChannel = await findEmptyServerChannel(createUser);
+    returnData.socket = await findEmptySocket(data, createUser);
 
-  /* server */
-  const [readServer] = await sql
-    .promise()
-    .query(`SHOW TABLE STATUS WHERE name = 'server'`);
-  const [findServer] = await sql.promise().query(
-    `SELECT server.id,
-      enter.channel_id,
-      server.limits,
-      channel.limits AS channel_limits,
-      COUNT(enter.channel_id) AS user_count
-    FROM enter
-    LEFT JOIN server
-    ON enter.server_id = server.id
-    LEFT JOIN channel
-    ON enter.channel_id = channel.id
-    GROUP BY enter.server_id, enter.channel_id`
-  );
-  let isServerFull = true;
-  let serverTarget = null;
-  for (let i = 0; i < findServer.length; i++) {
-    let server = findServer[i];
-    console.log(server);
-    if (
-      server.count < server.limits &&
-      server.user_count >= server.channel_limits
-    ) {
-      isServerFull = false;
-      serverTarget = readServer[0].Auto_increment || 0;
-      await sql.promise().query(
-        `INSERT INTO server (name, limits)
-        VALUES (?, ?)`,
-        [`server${readServer[0].Auto_increment || 0}`, options.limit.server]
-      );
-      break;
-    }
-  }
-  if (isServerFull) {
-    await sql.promise().query(
-      `INSERT INTO server (name, limits)
-      VALUES (?, ?)`,
-      [`server${readServer[0].Auto_increment || 0}`, options.limit.server]
+    returnData.location = await sql.promise().query(
+      `INSERT INTO location (server_id, channel_id, user_id, pox, poy, poz, roy)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        returnData.serverChannel.server.pk,
+        returnData.serverChannel.channel.pk,
+        createUser.insertId,
+        data.pox,
+        data.poy,
+        0,
+        data.roy,
+      ]
     );
-    serverTarget = readServer[0].Auto_increment || 0;
+  } catch (e) {
+    console.log(e.message);
   }
-
-  await sql.promise().query(
-    `INSERT INTO enter (server_id, user_id, channel_id, type, status)
-    VALUES (?, ?, ?, ?, ?)`,
-    [serverTarget, createUser.insertId, channelTarget, "viewer", 1]
-  );
 
   res.status(200).json({
     ok: true,
-    server: serverTarget,
-    channel: channelTarget,
-    type: "viewer",
-    alive: 1,
-    socketHost: "",
-    socketPort: 4000,
+    user: {
+      uuid: data.uuid,
+      locale: convertLangToRegion(data.locale),
+    },
+    server: returnData.serverChannel.server,
+    channel: returnData.serverChannel.channel,
+    socket: returnData.socket,
   });
 };
+
 Query.login = async (req, res, next) => {
   res.status(200).json({
     ok: true,
   });
 };
+Query.player = (req, res, next) => {};
+
 Query.logout = async (req, res, next) => {
   res.status(200).json({
     ok: true,
+  });
+};
+Query.delete = (req, res, next) => {};
+
+Query.players = async (req, res, next) => {
+  const [readPlayers] = await sql.promise().query(
+    `SELECT
+      user.uuid,
+      user.nickname,
+      location.server_id,
+      location.channel_id,
+      location.pox,
+      location.poy,
+      location.poz,
+      location.roy
+    FROM location
+      LEFT JOIN user
+        ON location.user_id = user.id
+      LEFT JOIN enter
+        ON location.user_id = enter.user_id
+    WHERE enter.type = 'player'
+    `
+  );
+  res.status(200).json({
+    players: readPlayers,
   });
 };
 

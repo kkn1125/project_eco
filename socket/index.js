@@ -1,15 +1,34 @@
 import dotenv from "dotenv";
 import path from "path";
 import uWs from "uWebSockets.js";
+import axios from "axios";
+import protobuf from "protobufjs";
+
+const { Message, Field } = protobuf;
+
+Field.d(1, "string", "required")(Message.prototype, "uuid");
+Field.d(2, "fixed32", "required")(Message.prototype, "server");
+Field.d(3, "fixed32", "required")(Message.prototype, "channel");
+Field.d(4, "float", "required")(Message.prototype, "pox");
+Field.d(5, "float", "required")(Message.prototype, "poy");
+Field.d(6, "float", "required")(Message.prototype, "poz");
+Field.d(7, "float", "required")(Message.prototype, "roy");
 
 const __dirname = path.resolve();
 const mode = process.env.NODE_ENV;
 
 dotenv.config({
+  path: path.join(__dirname, `.env`),
+});
+dotenv.config({
   path: path.join(__dirname, `.env.${mode}`),
 });
 
 const port = Number(process.env.PORT) || 4000;
+const apiHost = process.env.API_HOST;
+const apiPort = process.env.API_PORT;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
 const app = uWs
   ./*SSL*/ App(/* {
@@ -28,6 +47,7 @@ const app = uWs
       res.upgrade(
         {
           url: req.getUrl(),
+          token: req.getQuery("csrftoken"),
         },
         /* Spell these correctly */
         req.getHeader("sec-websocket-key"),
@@ -41,7 +61,31 @@ const app = uWs
     },
     message: (ws, message, isBinary) => {
       /* Ok is false if backpressure was built up, wait for drain */
-      let ok = ws.send(message, isBinary);
+      if (isBinary) {
+      } else {
+        const strings = decoder.decode(message);
+        const json = JSON.parse(strings);
+        if (json.type === "attach") {
+          ws.subscribe("broadcast");
+          ws.subscribe(`${json.server}-${json.channel}`);
+          ws.subscribe(ws.token);
+          console.log(`http://${apiHost}:${apiPort}/v1/query/list/players`);
+          axios
+            .post(`http://${apiHost}:${apiPort}/v1/query/list/players`)
+            .then((result) => {
+              const { data } = result;
+              const { players } = data;
+              console.log(players);
+              app.publish(
+                `${json.server}-${json.channel}`,
+                JSON.stringify({
+                  type: "players",
+                  players: players,
+                })
+              );
+            });
+        }
+      }
     },
     drain: (ws) => {
       console.log("WebSocket backpressure: " + ws.getBufferedAmount());
