@@ -1,0 +1,24 @@
+{
+  "name": "socketserver",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev:socket": "CHOKIDAR_USEPOLLING=true nodemon main.js",
+    "dev": "concurrently --kill-others-on-fail \"npm run dev:socket\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.0.3",
+    "esm": "^3.2.25",
+    "mysql2": "^2.3.3",
+    "pm2": "^5.2.2",
+    "protobufjs": "^7.1.2",
+    "uuid": "^9.0.0",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.15.0"
+  }
+}

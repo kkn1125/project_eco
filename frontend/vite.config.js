@@ -26,6 +26,7 @@ export default defineConfig(({ command, mode, ssrBuild }) => {
         "/v1/query": {
           target: `http://${apiHost}:${apiPort}`,
           changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/v1\/query/, ""),
           secure: false,
           ws: false,
         },
