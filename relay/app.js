@@ -9,28 +9,16 @@ const serverPort = process.env.SERVER_PORT;
 const clientHost = process.env.CLIENT_HOST;
 const clientPort = process.env.CLIENT_PORT;
 
+const relay = {};
+
 async function serverRun() {
-  const sock = new zmq.Reply();
+  relay.pull = new zmq.Pull();
+  relay.push = new zmq.Push();
+  relay.pull.connect(`tcp://${serverHost}:${serverPort}`);
+  await relay.push.bind(`tcp://${clientHost}:${clientPort}`);
 
-  await sock.bind(`tcp://${serverHost}:${serverPort}`);
-
-  for await (const [msg] of sock) {
-    await sock.send(2 * parseInt(msg, 10));
+  for await (const [msg] of relay.pull) {
+    relay.push.send(msg);
   }
 }
-
 serverRun();
-
-async function clientRun() {
-  const sock = new zmq.Request();
-
-  sock.connect(`tcp://${clientHost}:${clientPort}`);
-  console.log("Producer bound to port %d on backend server", clientPort);
-
-  await sock.send("4");
-  const [result] = await sock.receive();
-
-  console.log(result);
-}
-
-clientRun();

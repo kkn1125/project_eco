@@ -4,10 +4,33 @@ import uWs from "uWebSockets.js";
 import axios from "axios";
 import protobuf from "protobufjs";
 import Queue from "./src/models/Queue.js";
+import zmq from "zeromq";
 
-const locationQueue = new Queue();
+const __dirname = path.resolve();
+const mode = process.env.NODE_ENV;
+dotenv.config({
+  path: path.join(__dirname, `.env`),
+});
+dotenv.config({
+  path: path.join(__dirname, `.env.${mode}`),
+});
+
+// const locationQueue = new Queue();
 
 const { Message, Field } = protobuf;
+const port = Number(process.env.PORT) || 4000;
+const apiHost = process.env.API_HOST;
+const apiPort = process.env.API_PORT;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const relay = {};
+const sockets = new Map();
+
+/* zeromq */
+const serverHost = process.env.RELAY_SOCKET_SERVER_HOST;
+const serverPort = process.env.RELAY_SOCKET_SERVER_PORT;
+const clientHost = process.env.RELAY_SOCKET_CLIENT_HOST;
+const clientPort = process.env.RELAY_SOCKET_CLIENT_PORT;
 
 Field.d(1, "string", "required")(Message.prototype, "uuid");
 Field.d(2, "int32", "required")(Message.prototype, "server");
@@ -17,23 +40,7 @@ Field.d(5, "float", "required")(Message.prototype, "poy");
 Field.d(6, "float", "required")(Message.prototype, "poz");
 Field.d(7, "float", "required")(Message.prototype, "roy");
 
-const __dirname = path.resolve();
-const mode = process.env.NODE_ENV;
-
-dotenv.config({
-  path: path.join(__dirname, `.env`),
-});
-dotenv.config({
-  path: path.join(__dirname, `.env.${mode}`),
-});
-
-const port = Number(process.env.PORT) || 4000;
-const apiHost = process.env.API_HOST;
-const apiPort = process.env.API_PORT;
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-const sockets = new Map();
+/* zeromq */
 
 const app = uWs
   ./*SSL*/ App(/* {
@@ -74,8 +81,12 @@ const app = uWs
       /* Ok is false if backpressure was built up, wait for drain */
       if (isBinary) {
         const data = Message.decode(new Uint8Array(message)).toJSON();
-        app.publish(`${data.server}-${data.channel}`, message, isBinary, true);
-        axios.post(`http://${apiHost}:${apiPort}/v1/query/type/location`, data);
+        axios
+          .post(`http://${apiHost}:${apiPort}/v1/query/type/location`, data)
+          .then(async () => {
+            await relay.push.send(JSON.stringify(data));
+          });
+        // app.publish(`${data.server}-${data.channel}`, message, isBinary, true);
         // locationQueue.enter(message);
       } else {
         const strings = decoder.decode(message);
@@ -99,14 +110,22 @@ const app = uWs
               server: json.server,
               channel: json.channel,
             })
-            .then((result) => {
+            .then(async (result) => {
               const { data } = result;
               const { players } = data;
               console.log(players);
-              app.publish(
-                `${json.server}-${json.channel}`,
+              // app.publish(
+              //   `${json.server}-${json.channel}`,
+              //   JSON.stringify({
+              //     type: "players",
+              //     players: players,
+              //   })
+              // );
+              await relay.push.send(
                 JSON.stringify({
                   type: "players",
+                  server: json.server,
+                  channel: json.channel,
                   players: players,
                 })
               );
@@ -120,13 +139,21 @@ const app = uWs
               nickname: json.nickname,
               password: json.password,
             })
-            .then((result) => {
+            .then(async (result) => {
               const { data } = result;
               if (data.ok) {
-                app.publish(
-                  `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
+                // app.publish(
+                //   `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
+                //   JSON.stringify({
+                //     type: "players",
+                //     players: data.players,
+                //   })
+                // );
+                await relay.push.send(
                   JSON.stringify({
                     type: "players",
+                    server: sockets.get(ws).server,
+                    channel: sockets.get(ws).channel,
                     players: data.players,
                   })
                 );
@@ -159,13 +186,21 @@ const app = uWs
           server: sockets.get(ws).server,
           channel: sockets.get(ws).channel,
         })
-        .then((result) => {
+        .then(async (result) => {
           const { data } = result;
           if (data.ok) {
-            app.publish(
-              `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
+            // app.publish(
+            //   `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
+            //   JSON.stringify({
+            //     type: "players",
+            //     players: data.players,
+            //   })
+            // );
+            await relay.push.send(
               JSON.stringify({
                 type: "players",
+                server: sockets.get(ws).server,
+                channel: sockets.get(ws).channel,
                 players: data.players,
               })
             );
@@ -194,3 +229,35 @@ const app = uWs
 //     app.publish(`${data.server}-${data.channel}`, message, true, true);
 //   }
 // }, 16);
+
+async function clientRun() {
+  relay.pull = new zmq.Pull();
+  relay.push = new zmq.Push();
+  relay.pull.connect(`tcp://${clientHost}:${clientPort}`);
+  await relay.push.bind(`tcp://${serverHost}:${serverPort}`);
+
+  for await (const [msg] of relay.pull) {
+    try {
+      const decoded = decoder.decode(msg);
+
+      const json = JSON.parse(decoded);
+      if (json.type === "players") {
+        console.log("전파받음", json);
+        console.log("전파받음", msg);
+        app.publish(
+          `${json.server}-${json.channel}`,
+          JSON.stringify({ type: json.type, players: json.players })
+        );
+      }
+    } catch (e) {
+      // console.log("전파받음", json);
+      const decoded = decoder.decode(msg);
+
+      const json = JSON.parse(decoded);
+      console.log("전파받음", msg);
+      const message = Message.encode(new Message(json)).finish();
+      app.publish(`broadcast`, message, true, true);
+    }
+  }
+}
+clientRun();
