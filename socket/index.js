@@ -3,6 +3,9 @@ import path from "path";
 import uWs from "uWebSockets.js";
 import axios from "axios";
 import protobuf from "protobufjs";
+import Queue from "./src/models/Queue.js";
+
+const locationQueue = new Queue();
 
 const { Message, Field } = protobuf;
 
@@ -71,13 +74,9 @@ const app = uWs
       /* Ok is false if backpressure was built up, wait for drain */
       if (isBinary) {
         const data = Message.decode(new Uint8Array(message)).toJSON();
+        app.publish(`${data.server}-${data.channel}`, message, isBinary, true);
         axios.post(`http://${apiHost}:${apiPort}/v1/query/type/location`, data);
-        app.publish(
-          `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
-          message,
-          isBinary,
-          true
-        );
+        // locationQueue.enter(message);
       } else {
         const strings = decoder.decode(message);
         const json = JSON.parse(strings);
@@ -96,7 +95,10 @@ const app = uWs
           ws.subscribe(ws.token);
           // console.log(`http://${apiHost}:${apiPort}/v1/query/list/players`);
           axios
-            .post(`http://${apiHost}:${apiPort}/v1/query/list/players`)
+            .post(`http://${apiHost}:${apiPort}/v1/query/list/players`, {
+              server: json.server,
+              channel: json.channel,
+            })
             .then((result) => {
               const { data } = result;
               const { players } = data;
@@ -121,20 +123,27 @@ const app = uWs
             .then((result) => {
               const { data } = result;
               if (data.ok) {
-                axios
-                  .post(`http://${apiHost}:${apiPort}/v1/query/list/players`)
-                  .then((result) => {
-                    const { data } = result;
-                    const { players } = data;
-                    // console.log(players);
-                    app.publish(
-                      `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
-                      JSON.stringify({
-                        type: "players",
-                        players: players,
-                      })
-                    );
-                  });
+                app.publish(
+                  `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
+                  JSON.stringify({
+                    type: "players",
+                    players: data.players,
+                  })
+                );
+                // axios
+                //   .post(`http://${apiHost}:${apiPort}/v1/query/list/players`)
+                //   .then((result) => {
+                //     const { data } = result;
+                //     const { players } = data;
+                //     // console.log(players);
+                //     app.publish(
+                //       `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
+                //       JSON.stringify({
+                //         type: "players",
+                //         players: players,
+                //       })
+                //     );
+                //   });
               }
             });
         }
@@ -144,6 +153,25 @@ const app = uWs
       console.log("WebSocket backpressure: " + ws.getBufferedAmount());
     },
     close: (ws, code, message) => {
+      axios
+        .post(`http://${apiHost}:${apiPort}/v1/query/logout`, {
+          uuid: sockets.get(ws).uuid,
+          server: sockets.get(ws).server,
+          channel: sockets.get(ws).channel,
+        })
+        .then((result) => {
+          const { data } = result;
+          if (data.ok) {
+            app.publish(
+              `${sockets.get(ws).server}-${sockets.get(ws).channel}`,
+              JSON.stringify({
+                type: "players",
+                players: data.players,
+              })
+            );
+          }
+        });
+
       console.log("WebSocket closed");
     },
   })
@@ -157,3 +185,12 @@ const app = uWs
       console.log("Failed to listen to port " + port);
     }
   });
+
+// setInterval(() => {
+//   if (locationQueue.count > 0) {
+//     const message = locationQueue.get();
+//     const data = Message.decode(new Uint8Array(message)).toJSON();
+//     console.log(data)
+//     app.publish(`${data.server}-${data.channel}`, message, true, true);
+//   }
+// }, 16);

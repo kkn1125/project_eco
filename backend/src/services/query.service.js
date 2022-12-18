@@ -235,17 +235,9 @@ Query.enter = async (req, res, next) => {
     returnData.socket = await findEmptySocket(data, createUser);
 
     returnData.location = await sql.promise().query(
-      `INSERT INTO location (server_id, channel_id, user_id, pox, poy, poz, roy)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        returnData.serverChannel.server.pk,
-        returnData.serverChannel.channel.pk,
-        createUser.insertId,
-        data.pox,
-        data.poy,
-        0,
-        data.roy,
-      ]
+      `INSERT INTO location (user_id, pox, poy, poz, roy)
+      VALUES (?, ?, ?, ?, ?)`,
+      [createUser.insertId, data.pox, data.poy, 0, data.roy]
     );
   } catch (e) {
     console.log(e.message);
@@ -286,14 +278,56 @@ Query.login = async (req, res, next) => {
     )`,
     [data.server, data.channel, data.uuid]
   );
+  const [readPlayers] = await sql.promise().query(
+    `SELECT
+      user.uuid,
+      user.nickname,
+      enter.server_id,
+      enter.channel_id,
+      location.pox,
+      location.poy,
+      location.poz,
+      location.roy
+    FROM location
+      LEFT JOIN user
+        ON location.user_id = user.id
+      LEFT JOIN enter
+        ON location.user_id = enter.user_id
+    WHERE enter.type = 'player'
+    `,
+    [data.server, data.channel]
+  );
   res.status(200).json({
     ok: true,
+    players: readPlayers,
   });
 };
 
 Query.logout = async (req, res, next) => {
+  const data = req.body;
+  await sql.promise().query(`DELETE FROM user WHERE uuid = ?`, [data.uuid]);
+  const [readPlayers] = await sql.promise().query(
+    `SELECT
+      user.uuid,
+      user.nickname,
+      enter.server_id,
+      enter.channel_id,
+      location.pox,
+      location.poy,
+      location.poz,
+      location.roy
+    FROM location
+      LEFT JOIN user
+        ON location.user_id = user.id
+      LEFT JOIN enter
+        ON location.user_id = enter.user_id
+    WHERE enter.type = 'player'
+    `,
+    [data.server, data.channel]
+  );
   res.status(200).json({
     ok: true,
+    players: readPlayers,
   });
 };
 
@@ -319,12 +353,13 @@ Query.location = async (req, res, next) => {
 };
 
 Query.players = async (req, res, next) => {
+  const data = req.body;
   const [readPlayers] = await sql.promise().query(
     `SELECT
       user.uuid,
       user.nickname,
-      location.server_id,
-      location.channel_id,
+      enter.server_id,
+      enter.channel_id,
       location.pox,
       location.poy,
       location.poz,
@@ -335,7 +370,8 @@ Query.players = async (req, res, next) => {
       LEFT JOIN enter
         ON location.user_id = enter.user_id
     WHERE enter.type = 'player'
-    `
+    `,
+    [data.server, data.channel]
   );
   res.status(200).json({
     players: readPlayers,

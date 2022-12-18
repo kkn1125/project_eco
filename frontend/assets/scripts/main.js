@@ -124,7 +124,7 @@ function clearScene() {
 function userRender(time) {
   for (let i = 0; i < users.length / 2; i++) {
     const user1 = users[i];
-    const user2 = users[users.length - 1 + i];
+    const user2 = users[users.length - 1 - i];
     ctx.fillRect(user1.pox, user1.poy, game.size.user.x, game.size.user.y);
     ctx.fillText(user1.nickname, user1.pox + game.size.user.x / 2, user1.poy);
     if (user2 && user1 !== user2) {
@@ -143,7 +143,6 @@ function moving() {
     if (!user2) continue;
     if (direction.w || direction.a || direction.s || direction.d) {
       if (user1.uuid === me) {
-        console.log(me);
         if (direction.w) {
           user1.poy -= game.speed;
         }
@@ -160,8 +159,8 @@ function moving() {
           Message.encode(
             new Message({
               uuid: userInfo.uuid,
-              server: user1.server,
-              channel: user1.channel,
+              server: user1.server_id,
+              channel: user1.channel_id,
               pox: user1.pox,
               poy: user1.poy,
               poz: user1.poz,
@@ -189,8 +188,8 @@ function moving() {
             Message.encode(
               new Message({
                 uuid: userInfo.uuid,
-                server: user2.server,
-                channel: user2.channel,
+                server: user2.server_id,
+                channel: user2.channel_id,
                 pox: user2.pox,
                 poy: user2.poy,
                 poz: user2.poz,
@@ -252,6 +251,7 @@ window.addEventListener("load", () => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (!e.key) return;
   const key = e.key.toLowerCase();
   if (key === "w" || key === "a" || key === "s" || key === "d") {
     direction[key] = true;
@@ -259,6 +259,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("keyup", (e) => {
+  if (!e.key) return;
   const key = e.key.toLowerCase();
   if (key === "w" || key === "a" || key === "s" || key === "d") {
     direction[key] = false;

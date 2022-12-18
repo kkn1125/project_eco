@@ -209,38 +209,26 @@ CREATE TABLE IF NOT EXISTS `project_eco`.`likes` (
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
+
 -- -----------------------------------------------------
 -- Table `project_eco`.`location`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `project_eco`.`location` (
   `id` INT NOT NULL AUTO_INCREMENT,
-  `server_id` INT NOT NULL,
-  `channel_id` INT NOT NULL,
   `user_id` INT NOT NULL,
   `pox` FLOAT NOT NULL,
   `poy` FLOAT NOT NULL,
   `poz` FLOAT NOT NULL,
   `roy` FLOAT NOT NULL,
   PRIMARY KEY (`id`),
-  INDEX `fk_location_enter1_idx` (`server_id` ASC) VISIBLE,
-  INDEX `fk_location_enter2_idx` (`channel_id` ASC) VISIBLE,
   INDEX `fk_location_enter3_idx` (`user_id` ASC) VISIBLE,
-  CONSTRAINT `fk_location_enter1`
-    FOREIGN KEY (`server_id`)
-    REFERENCES `project_eco`.`enter` (`server_id`)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT `fk_location_enter2`
-    FOREIGN KEY (`channel_id`)
-    REFERENCES `project_eco`.`enter` (`channel_id`)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
   CONSTRAINT `fk_location_enter3`
     FOREIGN KEY (`user_id`)
     REFERENCES `project_eco`.`enter` (`user_id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
+
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
@@ -433,4 +421,21 @@ SELECT
     desc socket;
     use project_eco;
     select * from enter;
+    select * from location;
     select * from connection;
+    select * from user;
+    
+    SELECT
+      user.uuid,
+      user.nickname,
+      #
+      location.pox,
+      location.poy,
+      location.poz,
+      location.roy
+    FROM location
+      LEFT JOIN user
+        ON location.user_id = user.id
+      LEFT JOIN enter
+        ON location.user_id = enter.user_id
+    WHERE enter.type = 'player';
