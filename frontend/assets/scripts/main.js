@@ -240,6 +240,7 @@ window.addEventListener("load", () => {
       locale: userInfo.locale,
       pox: app.width / 2 - game.size.user.x / 2,
       poy: app.height / 2 - game.size.user.y / 2,
+      poz: 0,
       roy: (Math.PI / 180) * 90,
     })
     .then((result) => {

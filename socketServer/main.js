@@ -44,6 +44,7 @@ const app = uWs
     idleTimeout: 32,
     /* Handlers */
     upgrade: (res, req, context) => {
+      // console.log('context',context)
       /* This immediately calls open handler, you must not use res after this call */
       res.upgrade(
         {
@@ -187,19 +188,16 @@ const app = uWs
   })
   .post("/enter", (res, req) => {
     let url = req.getUrl();
-    readJson(
-      res,
-      async (obj) => {
-        console.log("Posted to " + url + ": ");
-        console.log(obj);
-        await queryService.enter(obj);
-        res.end("Thanks for this json!");
-      },
-      () => {
-        /* Request was prematurely aborted or invalid or missing, stop reading */
-        console.log("Invalid JSON or no data at all!");
-      }
-    );
+
+    readBody.bind(res)(async (obj) => {
+      console.log("Posted to " + url + ": ");
+      console.log(obj);
+      const result = await queryService.enter({
+        body: obj,
+      });
+      console.log(result)
+      res.writeHeader('Content-Type', 'application/json').end(JSON.stringify(result));
+    });
   })
   .post("/login", (res, req) => {
     res.end("Nothing to see here!");
@@ -216,10 +214,10 @@ const app = uWs
   });
 
 /* Helper function for reading a posted JSON body */
-function readJson(res, cb, err) {
+function readBody(cb) {
   let buffer;
   /* Register data cb */
-  res.onData((ab, isLast) => {
+  this.onData((ab, isLast) => {
     let chunk = Buffer.from(ab);
     if (isLast) {
       let json;
@@ -228,7 +226,7 @@ function readJson(res, cb, err) {
           json = JSON.parse(Buffer.concat([buffer, chunk]));
         } catch (e) {
           /* res.close calls onAborted */
-          res.close();
+          this.close();
           return;
         }
         cb(json);
@@ -237,7 +235,7 @@ function readJson(res, cb, err) {
           json = JSON.parse(chunk);
         } catch (e) {
           /* res.close calls onAborted */
-          res.close();
+          this.close();
           return;
         }
         cb(json);
@@ -252,5 +250,8 @@ function readJson(res, cb, err) {
   });
 
   /* Register error cb */
-  res.onAborted(err);
+  this.onAborted(() => {
+    /* Request was prematurely aborted or invalid or missing, stop reading */
+    console.log("Invalid JSON or no data at all!");
+  });
 }

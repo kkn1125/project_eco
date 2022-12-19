@@ -208,7 +208,7 @@ async function findEmptySocket(data, createUser) {
 }
 
 Query.enter = async (req, res, next) => {
-  const data = req;
+  const data = req.body;
   let returnData = {
     serverChannel: null,
     socket: null,
@@ -243,8 +243,17 @@ Query.enter = async (req, res, next) => {
     console.log(e.message);
   }
 
-  res.status(200).json({
-    ok: true,
+  // res.status(200).json({
+  //   ok: true,
+  //   user: {
+  //     uuid: data.uuid,
+  //     locale: convertLangToRegion(data.locale),
+  //   },
+  //   server: returnData.serverChannel.server,
+  //   channel: returnData.serverChannel.channel,
+  //   socket: returnData.socket,
+  // });
+  return {
     user: {
       uuid: data.uuid,
       locale: convertLangToRegion(data.locale),
@@ -252,7 +261,7 @@ Query.enter = async (req, res, next) => {
     server: returnData.serverChannel.server,
     channel: returnData.serverChannel.channel,
     socket: returnData.socket,
-  });
+  };
 };
 
 Query.login = async (req, res, next) => {
